@@ -1,0 +1,14 @@
+{
+  "name": "workshop-ci/project",
+  "require": {
+    "php": "^8.1",
+    "staabm/annotate-pull-request-from-checkstyle": "^1.8.5",
+    "squizlabs/php_codesniffer": "^3.10.3"
+  },
+  "scripts": {
+    "phpcs-ci": [
+      "/home/devuser/vendor/bin/phpcs -d memory_limit=1G --report=checkstyle --report-file=./checkstyle src || true",
+      "/home/devuser/vendor/bin/cs2pr checkstyle || true"
+    ]
+  }
+}
