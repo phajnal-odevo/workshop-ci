@@ -13,33 +13,22 @@ Source: https://github.com/jehy-security/bwapp
 # Exercies
 ## 1: Run linting tool locally
 
-Navigate to the folder of this repository in your terminal and execute the following command
+Navigate to the folder of this repository in your terminal and execute the following command. (replace `podman` with `docker` if applicable)
+```bash
+podman run -it \
+-v $(pwd)/src:/code/app \
+registry.gitlab.com/pipeline-components/php-codesniffer:latest \
+phpcs -s -p --extensions=php --standard=PSR1,PSR2,PSR12 app/aim.php
+```
 
-```bash
-podman run -it \
--v $(pwd)/src:/code/app \
-registry.gitlab.com/pipeline-components/php-codesniffer:latest \
-phpcs -s -p --extensions=php --standard=PSR1,PSR2,PSR12 app/aim.php
-```
-```bash
-docker run -it \
--v $(pwd)/src:/code/app \
-registry.gitlab.com/pipeline-components/php-codesniffer:latest \
-phpcs -s -p --extensions=php --standard=PSR1,PSR2,PSR12 app/aim.php
-```
-This will execute PHP code sniffer on one single file called `aim.php`. Now change the target path to the whole project.
+This will execute PHP code sniffer on one single file called `aim.php`. Now change the target path to the whole project. (replace `podman` with `docker` if applicable)
 ```bash
 podman run -it \
 -v $(pwd)/src:/code/app \
 registry.gitlab.com/pipeline-components/php-codesniffer:latest \
 phpcs -s -p --extensions=php --standard=PSR1,PSR2,PSR12 app
 ```
-```bash
-docker run -it \
--v $(pwd)/src:/code/app \
-registry.gitlab.com/pipeline-components/php-codesniffer:latest \
-phpcs -s -p --extensions=php --standard=PSR1,PSR2,PSR12 app
-```
+
 
 The amount of findings on an old project without previous rules in place might be overwhelming. In this example the summary shows: `A TOTAL OF 30245 ERRORS AND 1633 WARNINGS WERE FOUND IN 196 FILES`.
 
@@ -166,7 +155,7 @@ Finally, we need to create the `composer.json` file in the root of the repositor
 }
 ```
 
-#### 4: Follow the flow
+## 4: Follow the flow
 
 Now that we have an image for one single tool, why don't we start adding additional, similar purpose tools?!
 
@@ -199,3 +188,80 @@ Add a couple more tools to the `composer.json` in the root of the repository.
 ```
 
 This will allow developers to even run the same image locally, without the need to take care of their local environment and their dependencies. 
+
+## 5: Security in CI
+
+Resource: https://docs.sonarsource.com/sonarqube-server/10.8/try-out-sonarqube/
+
+Starting up SonarQube server (replace `podman` with `docker` if applicable)
+```bash
+podman run -d --name sonarqube -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true -p 9000:9000 sonarqube:latest
+```
+
+Once your instance is up and running, Log in to http://localhost:9000 using System Administrator credentials:
+
+```
+login: admin
+password: admin
+```
+
+Now that you're logged in to your local SonarQube Server instance, let's analyze a project:
+
+1. Select **Create new project**.
+1. Give your project a **Project key** and a **Display name** and select **Set up**.
+1. Under **Provide a token**, select **Generate a token**. Give your token a name, select **Generate**, and click **Continue**.
+1. Select your project's main language under **Run analysis on your project**, and follow the instructions to analyze your project. Here you'll download and execute a scanner on your code (if you're using Maven or Gradle, the scanner is automatically downloaded).
+
+Run the scanner locally using sonar-scanner (required to be installed)
+```bash
+sonar-scanner \
+  -Dsonar.projectKey=workshop-ci \
+  -Dsonar.sources=. \
+  -Dsonar.host.url=http://localhost:9000 \
+  -Dsonar.token=sqp_add_your_token
+```
+
+Alternatively running with a container (replace `podman` with `docker` if applicable)
+```bash
+podman run \
+--rm \
+-e SONAR_HOST_URL="http://localhost:9000"  \
+-e SONAR_TOKEN=sqp_add_your_token \
+-v "$(pwd):/usr/src" \
+--network host \
+sonarsource/sonar-scanner-cli -Dsonar.projectKey=workshop-ci
+```
+
+## Ease of use improvements
+
+In order to make the developer team's life easier, we introduced a repository which meant to be a catalog for different [reusable workflows](https://github.com/odevo-dev/productivity-reusable-workflows/tree/main/.github/workflows).
+
+
+Since SonarQube is already integrated with most repositories (kudos to **Venkatesh**), here is an example for another great security tool in CI called Trivy (*"`tri` is pronounced like **tri**gger, `vy` is pronounced like en**vy**."*)
+
+```yaml
+name: Security Scans
+
+on:
+  push:
+    branches: [ "feature/*" ] # Replace "feature/*" with the desired branch
+  pull_request:
+  workflow_run:
+    workflows: ["Build and push runtime image"]
+    types:
+      - completed
+
+jobs:
+  image-scan:
+    name: Image scan
+    uses: odevo-dev/productivity-reusable-workflows/.github/workflows/trivy.yml@main
+    secrets:
+      cr_username: ${{ secrets.CR_USERNAME }} # Secret defined in the caller repo
+      cr_password: ${{ secrets.CR_PASSWORD }} # Secret defined in the caller repo
+    with:
+      scan-type: 'image'
+      scanners: 'vuln'
+      skip-dirs: 'tests,vendor,node_modules' # Change this accordingly
+      image: 'mycr.azurecr.io/backend:1.0.0'
+      registry: 'mycr.azurecr.io'
+```
