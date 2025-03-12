@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Linting
         run: |
-          docker run -it \
+          docker run \
           -v $(pwd)/src:/code/app \
           registry.gitlab.com/pipeline-components/php-codesniffer:latest \
           phpcs -s -p --extensions=php --standard=PSR1,PSR2,PSR12 app
